@@ -67,7 +67,7 @@ function RoundEditor({ players, round, busy, onCancel, onSave }: RoundEditorProp
                     aria-label={`${player.name} puanı`}
                     type="number"
                     step="1"
-                    inputMode="numeric"
+                    inputMode="decimal"
                     value={scores[player.id]}
                     onChange={(event) => setScores((current) => ({ ...current, [player.id]: event.target.value }))}
                     required
@@ -134,7 +134,7 @@ export default function GameRoom({ gameId }: GameRoomProps) {
   const [saving, setSaving] = useState(false);
   const [editingRound, setEditingRound] = useState<Round | null | undefined>(undefined);
   const [penaltyTarget, setPenaltyTarget] = useState<Player | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [shareFeedback, setShareFeedback] = useState("");
   const [connection, setConnection] = useState("Bağlanıyor");
   const [isOwner, setIsOwner] = useState(false);
   const [recordCooldowns, setRecordCooldowns] = useState<Record<string, number>>({});
@@ -302,10 +302,28 @@ export default function GameRoom({ gameId }: GameRoomProps) {
   }
 
   async function handleShare() {
+    const gameTitle = game?.gameType === "101" ? "101 Okey" : "Okey";
+    const shareData = {
+      title: `Green Garden Dijital Yazboz · ${gameTitle}`,
+      text: `${gameTitle} masasının skorlarını canlı takip et.`,
+      url: window.location.href,
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        setShareFeedback("Paylaşıldı");
+        window.setTimeout(() => setShareFeedback(""), 1800);
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+
     try {
-      await navigator.clipboard.writeText(window.location.href);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      await navigator.clipboard.writeText(shareData.url);
+      setShareFeedback("Kopyalandı");
+      window.setTimeout(() => setShareFeedback(""), 1800);
     } catch {
       setActionError("Link kopyalanamadı. Adres çubuğundan bağlantıyı paylaşabilirsiniz.");
     }
@@ -329,7 +347,7 @@ export default function GameRoom({ gameId }: GameRoomProps) {
         <a className="brand" href="/"><span className="brand-mark">Y</span><span>yazboz</span></a>
         <div className="room-header-actions">
           <span className={`connection-pill ${connection.includes("açık") ? "connected" : ""}`}><span className="live-dot" />{connection}</span>
-          <button className="share-button" type="button" onClick={handleShare}><span>↗</span>{copied ? "Kopyalandı" : "Masayı paylaş"}</button>
+          <button className="share-button" type="button" onClick={handleShare}><span>↗</span>{shareFeedback || "Masayı paylaş"}</button>
         </div>
       </header>
 
