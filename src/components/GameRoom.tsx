@@ -10,6 +10,7 @@ import {
   updateRound,
 } from "@/lib/game-api";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
+import { createSummaryImage } from "@/lib/summary-image";
 import type { Game, GameRoomProps, GameStatus, LeaderboardRow, PenaltyEditorProps, Player, Round, RoundEditorProps } from "@/lib/types";
 
 function formatDate(value: string): string {
@@ -143,6 +144,9 @@ export default function GameRoom({ gameId }: GameRoomProps) {
   const [penaltyTarget, setPenaltyTarget] = useState<Player | null>(null);
   const [shareFeedback, setShareFeedback] = useState("");
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [showFinalSummary, setShowFinalSummary] = useState(false);
+  const [summaryBusy, setSummaryBusy] = useState(false);
+  const [summaryFeedback, setSummaryFeedback] = useState("");
   const [connection, setConnection] = useState("Bağlanıyor");
   const [isOwner, setIsOwner] = useState(false);
   const [recordCooldowns, setRecordCooldowns] = useState<Record<string, number>>({});
@@ -206,6 +210,10 @@ export default function GameRoom({ gameId }: GameRoomProps) {
 
     return () => window.clearInterval(interval);
   }, [recordCooldowns]);
+
+  useEffect(() => {
+    if (game?.status === "finished") setShowFinalSummary(true);
+  }, [game?.status]);
 
   const totals = useMemo<Record<string, number>>(() => {
     if (!game) return {};
@@ -297,6 +305,36 @@ export default function GameRoom({ gameId }: GameRoomProps) {
     await persist(game, "finished");
   }
 
+  async function handleSummaryImage(shareImage: boolean) {
+    if (!game) return;
+    setSummaryBusy(true);
+    setSummaryFeedback("");
+    try {
+      const file = await createSummaryImage(game, rankings);
+      if (shareImage && navigator.share && navigator.canShare?.({ files: [file] })) {
+        await navigator.share({
+          title: `${game.gameType === "101" ? "101 Okey" : "Okey"} oyun özeti`,
+          text: "Green Garden Dijital Yazboz oyun özeti",
+          files: [file],
+        });
+        setSummaryFeedback("Özet görseli paylaşıldı.");
+      } else {
+        const url = URL.createObjectURL(file);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = file.name;
+        link.click();
+        URL.revokeObjectURL(url);
+        setSummaryFeedback(shareImage ? "Bu tarayıcı dosya paylaşımını desteklemiyor; görsel indirildi." : "Özet görseli indirildi.");
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      setSummaryFeedback(error instanceof Error ? error.message : "Özet görseli oluşturulamadı.");
+    } finally {
+      setSummaryBusy(false);
+    }
+  }
+
   async function handleDeleteGame() {
     if (!game || !window.confirm("Masa ve tüm el kayıtları kalıcı olarak silinsin mi?")) return;
     setSaving(true);
@@ -359,6 +397,17 @@ export default function GameRoom({ gameId }: GameRoomProps) {
   const finished = game.status === "finished";
   const orderedRounds = [...game.rounds].reverse();
   const handCount = game.rounds.filter((round) => round.kind !== "record" && round.kind !== "penalty").length;
+  const summaryWinners = rankings.filter((row) => row.total === rankings[0]?.total);
+  const hasWinner = handCount > 0 && summaryWinners.length > 0;
+  const summaryIsTied = summaryWinners.length > 1;
+  const scoreMargin = summaryIsTied ? 0 : (rankings[1]?.total ?? rankings[0]?.total ?? 0) - (rankings[0]?.total ?? 0);
+  const winnerNames = summaryWinners.map((row) => row.players.map((player) => player.name).join(" & ")).join(" · ");
+  const handNumbers = new Map<string, number>();
+  let chronologicalHand = 0;
+  for (const round of game.rounds) {
+    if (round.kind !== "record" && round.kind !== "penalty") chronologicalHand += 1;
+    handNumbers.set(round.id, Math.max(chronologicalHand, 1));
+  }
 
   return (
     <main className="room-shell">
@@ -384,6 +433,7 @@ export default function GameRoom({ gameId }: GameRoomProps) {
             <p className="room-subtitle">Masa açıldı {formatDate(game.createdAt)} <span>·</span> {game.playMode === "teams" ? "Eşli oyun" : "Tekli oyun"} <span>·</span> {handCount} el oynandı</p>
           </div>
           {isOwner && !finished && <button className="finish-button" onClick={() => void handleFinish()} disabled={saving}>Oyunu bitir <span>✓</span></button>}
+          {finished && <button className="finish-button" onClick={() => setShowFinalSummary(true)}>Oyun özeti <span>↗</span></button>}
         </div>
 
         {(loadError || actionError) && <div className="error-banner" role="alert">{actionError || loadError}<button onClick={() => setActionError("")} aria-label="Uyarıyı kapat">×</button></div>}
@@ -392,10 +442,9 @@ export default function GameRoom({ gameId }: GameRoomProps) {
           <div className="section-heading"><div><span className="step-label">GÜNCEL DURUM</span><h2>Skor tablosu</h2></div><span className="round-count">{handCount} <span>EL</span></span></div>
           <p className="scoreboard-explainer">{game.playMode === "teams" ? "İki takımın toplam puanı gösterilir. En düşük puanlı takım öndedir." : "Her oyuncunun toplam puanı gösterilir. En düşük puanlı oyuncu öndedir."}</p>
           <div className="scoreboard-table">
-            <div className="scoreboard-head"><span>SIRA</span><span>{game.playMode === "teams" ? "TAKIM OYUNCULARI" : "OYUNCU"}</span><span>TOPLAM PUAN</span></div>
+            <div className="scoreboard-head"><span>{game.playMode === "teams" ? "TAKIM OYUNCULARI" : "OYUNCU"}</span><span>TOPLAM PUAN</span></div>
             {rankings.map((player, index) => (
               <div className="scoreboard-row" key={player.id}>
-                <span className={`rank-number ${index === 0 ? "rank-first" : ""}`}>{String(index + 1).padStart(2, "0")}</span>
                 <span className={`rank-player ${game.playMode === "teams" ? `rank-team${game.players.length === 2 ? " rank-team-single" : ""}` : ""}`}>
                   {player.players.map((member) => {
                     const playerIndex = game.players.findIndex((item) => item.id === member.id);
@@ -431,9 +480,9 @@ export default function GameRoom({ gameId }: GameRoomProps) {
             <div className="empty-rounds"><span className="empty-icon">↘</span><h3>İlk el henüz yazılmadı</h3><p>Oyun başlayınca el puanlarını buradan ekleyin.</p>{isOwner && !finished && <button className="secondary-button" onClick={() => setEditingRound(null)}>İlk eli ekle <span>＋</span></button>}</div>
           ) : (
             <div className="round-list">
-              {orderedRounds.map((round, index) => (
+              {orderedRounds.map((round) => (
                 <article className="round-card" key={round.id}>
-                  <div className="round-card-heading"><div><span className={`round-number ${round.kind === "record" ? "record-round-label" : round.kind === "penalty" ? "penalty-round-label" : ""}`}>{round.kind === "record" ? "REKOR" : round.kind === "penalty" ? "CEZA" : `EL ${String(handCount - orderedRounds.slice(0, index).filter((item) => item.kind !== "record" && item.kind !== "penalty").length).padStart(2, "0")}`}</span><span className="round-time">{formatDate(round.createdAt)}</span></div>
+                  <div className="round-card-heading"><div><span className={`round-number ${round.kind === "record" ? "record-round-label" : round.kind === "penalty" ? "penalty-round-label" : ""}`}>{round.kind === "record" ? "REKOR" : round.kind === "penalty" ? "CEZA" : `EL ${String(handNumbers.get(round.id) ?? 1).padStart(2, "0")}`}</span>{(round.kind === "record" || round.kind === "penalty") && <span className="round-related-hand">EL {String(handNumbers.get(round.id) ?? 1).padStart(2, "0")}</span>}<span className="round-time">{formatDate(round.createdAt)}</span></div>
                     {isOwner && !finished && <div className="round-actions"><button onClick={() => setEditingRound(round)}>Düzenle</button><button className="delete-text" onClick={() => void handleDeleteRound(round)}>Sil</button></div>}
                   </div>
                   <div className={`round-scores ${game.playMode === "teams" && game.players.length === 2 ? "round-scores-teams" : ""}`}>
@@ -456,6 +505,54 @@ export default function GameRoom({ gameId }: GameRoomProps) {
 
       {editingRound !== undefined && <RoundEditor players={game.players} round={editingRound} busy={saving} onCancel={() => setEditingRound(undefined)} onSave={(round) => void handleRoundSave(round)} />}
       {penaltyTarget && <PenaltyEditor player={penaltyTarget} busy={saving} onCancel={() => setPenaltyTarget(null)} onSave={(points) => void handlePenaltySave(penaltyTarget.id, points)} />}
+      {finished && showFinalSummary && <div className="modal-backdrop summary-backdrop" role="presentation" onMouseDown={(event) => {
+        if (event.target === event.currentTarget) setShowFinalSummary(false);
+      }}>
+        <section className="round-modal final-summary-modal" role="dialog" aria-modal="true" aria-labelledby="summary-title">
+          <div className="modal-heading">
+            <div><span className="step-label">OYUN TAMAMLANDI</span><h2 id="summary-title">Oyun özeti</h2></div>
+            <button className="icon-button" onClick={() => setShowFinalSummary(false)} aria-label="Özeti kapat" type="button">×</button>
+          </div>
+          <div className="summary-winner-card">
+            <span>{!hasWinner ? "SONUÇ" : summaryIsTied ? "BERABERE" : "KAZANAN"}</span>
+            <strong>{hasWinner ? winnerNames : "Henüz el oynanmadı"}</strong>
+            <small>{!hasWinner ? "Puanlanan el olmadığı için kazanan belirlenemedi." : summaryIsTied ? "En düşük toplam puan eşit." : `İkinci sırayla fark: ${scoreMargin} puan`}</small>
+          </div>
+          <div className="summary-section">
+            <h3>Son sıralama <span>{handCount} el</span></h3>
+            <ol className="summary-rankings">
+              {rankings.map((row, index) => <li key={row.id}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <strong>{row.players.map((player) => player.name).join(" & ")}</strong>
+                <b className={row.total < 0 ? "negative" : ""}>{row.total > 0 ? "+" : ""}{row.total}</b>
+              </li>)}
+            </ol>
+          </div>
+          <div className="summary-section">
+            <h3>El geçmişi <span>{game.rounds.length} kayıt</span></h3>
+            {orderedRounds.length === 0 ? <p className="summary-empty">Henüz el kaydı yok.</p> : <div className="summary-round-list">
+              {orderedRounds.map((round) => <article className="summary-round" key={round.id}>
+                <div className="summary-round-heading">
+                  <strong>{round.kind === "record" ? "Rekor" : round.kind === "penalty" ? "Ceza" : `El ${String(handNumbers.get(round.id) ?? 1).padStart(2, "0")}`}</strong>
+                  {(round.kind === "record" || round.kind === "penalty") && <span>El {String(handNumbers.get(round.id) ?? 1).padStart(2, "0")}</span>}
+                  <time>{formatDate(round.createdAt)}</time>
+                </div>
+                <div className="summary-round-scores">
+                  {game.players.map((player) => {
+                    const score = round.scores[player.id] ?? 0;
+                    return <div key={player.id}><span>{player.name}</span><b className={score < 0 ? "negative" : score > 0 ? "positive" : ""}>{score > 0 ? "+" : ""}{score}</b></div>;
+                  })}
+                </div>
+              </article>)}
+            </div>}
+          </div>
+          {summaryFeedback && <p className="summary-feedback" role="status">{summaryFeedback}</p>}
+          <div className="summary-actions">
+            <button className="secondary-button" type="button" onClick={() => void handleSummaryImage(false)} disabled={summaryBusy}>{summaryBusy ? "Hazırlanıyor…" : "Fotoğrafı indir"}</button>
+            <button className="primary-button" type="button" onClick={() => void handleSummaryImage(true)} disabled={summaryBusy}>{summaryBusy ? "Hazırlanıyor…" : "Özeti paylaş"}<span>↗</span></button>
+          </div>
+        </section>
+      </div>}
     </main>
   );
 }
