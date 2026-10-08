@@ -33,7 +33,7 @@ function RoundEditor({ players, round, busy, onCancel, onSave }: RoundEditorProp
       players.map((player) => [player.id, Number(scores[player.id])]),
     );
     if (players.some((player) => !Number.isSafeInteger(parsed[player.id]))) {
-      setError("Her oyuncu için tam sayı puan girin.");
+      setError("Her oyuncu veya takım için tam sayı puan girin.");
       return;
     }
 
@@ -54,7 +54,7 @@ function RoundEditor({ players, round, busy, onCancel, onSave }: RoundEditorProp
           <div><span className="step-label">EL PUANLARI</span><h2 id="round-title">{round ? "Eli düzenle" : "Yeni el"}</h2></div>
           <button className="icon-button" onClick={onCancel} aria-label="Kapat" type="button">×</button>
         </div>
-        <p className="modal-help">Bu eldeki puan değişimini her oyuncu için girin. Eksi puan kullanabilirsiniz.</p>
+        <p className="modal-help">Bu elde her oyuncunun veya takımın puan değişimini girin. Eksi puan kullanabilirsiniz.</p>
         <form onSubmit={handleSubmit}>
           <div className="score-input-list">
             {players.map((player, index) => (
@@ -171,10 +171,12 @@ export default function GameRoom({ gameId }: GameRoomProps) {
   const rankings = useMemo<LeaderboardRow[]>(() => {
     if (!game) return [];
     const rows = game.playMode === "teams"
-      ? [
-          { id: "team-1", players: [game.players[0], game.players[2]], total: totals[game.players[0].id] + totals[game.players[2].id] },
-          { id: "team-2", players: [game.players[1], game.players[3]], total: totals[game.players[1].id] + totals[game.players[3].id] },
-        ]
+      ? game.players.length === 2
+        ? game.players.map((team) => ({ id: team.id, players: [team], total: totals[team.id] ?? 0 }))
+        : [
+            { id: "team-1", players: [game.players[0], game.players[2]], total: (totals[game.players[0].id] ?? 0) + (totals[game.players[2].id] ?? 0) },
+            { id: "team-2", players: [game.players[1], game.players[3]], total: (totals[game.players[1].id] ?? 0) + (totals[game.players[3].id] ?? 0) },
+          ]
       : game.players.map((player) => ({ id: player.id, players: [player], total: totals[player.id] }));
     return rows.sort((a, b) => a.total - b.total);
   }, [game, totals]);
@@ -294,12 +296,13 @@ export default function GameRoom({ gameId }: GameRoomProps) {
 
         <section className="scoreboard-card">
           <div className="section-heading"><div><span className="step-label">GÜNCEL DURUM</span><h2>Skor tablosu</h2></div><span className="round-count">{handCount} <span>EL</span></span></div>
+          <p className="scoreboard-explainer">{game.playMode === "teams" ? "İki takımın toplam puanı gösterilir. En düşük puanlı takım öndedir." : "Her oyuncunun toplam puanı gösterilir. En düşük puanlı oyuncu öndedir."}</p>
           <div className="scoreboard-table">
-            <div className="scoreboard-head"><span>SIRA</span><span>{game.playMode === "teams" ? "TAKIMLAR" : "OYUNCU"}</span><span>TOPLAM PUAN</span></div>
+            <div className="scoreboard-head"><span>SIRA</span><span>{game.playMode === "teams" ? "TAKIM OYUNCULARI" : "OYUNCU"}</span><span>TOPLAM PUAN</span></div>
             {rankings.map((player, index) => (
               <div className="scoreboard-row" key={player.id}>
                 <span className={`rank-number ${index === 0 ? "rank-first" : ""}`}>{String(index + 1).padStart(2, "0")}</span>
-                <span className={`rank-player ${game.playMode === "teams" ? "rank-team" : ""}`}>
+                <span className={`rank-player ${game.playMode === "teams" ? `rank-team${game.players.length === 2 ? " rank-team-single" : ""}` : ""}`}>
                   {player.players.map((member) => {
                     const playerIndex = game.players.findIndex((item) => item.id === member.id);
                     return <span className="rank-player-member" key={member.id}>
@@ -334,7 +337,7 @@ export default function GameRoom({ gameId }: GameRoomProps) {
                   <div className="round-card-heading"><div><span className={`round-number ${round.kind === "record" ? "record-round-label" : ""}`}>{round.kind === "record" ? "REKOR" : `EL ${String(handCount - orderedRounds.slice(0, index).filter((item) => item.kind !== "record").length).padStart(2, "0")}`}</span><span className="round-time">{formatDate(round.createdAt)}</span></div>
                     {isOwner && !finished && <div className="round-actions"><button onClick={() => setEditingRound(round)}>Düzenle</button><button className="delete-text" onClick={() => void handleDeleteRound(round)}>Sil</button></div>}
                   </div>
-                  <div className="round-scores">
+                  <div className={`round-scores ${game.playMode === "teams" && game.players.length === 2 ? "round-scores-teams" : ""}`}>
                     {game.players.map((player, playerIndex) => {
                       const score = round.scores[player.id] ?? 0;
                       return <div className="round-score" key={player.id}><span className={`player-number player-number-${playerIndex + 1}`}>{player.name.slice(0, 1).toLocaleUpperCase("tr-TR")}</span><span>{player.name}</span><strong className={score < 0 ? "negative" : score > 0 ? "positive" : ""}>{score > 0 ? "+" : ""}{score}</strong></div>;

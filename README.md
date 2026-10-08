@@ -4,7 +4,7 @@ Okey ve 101 masaları için telefondan kullanılabilen, canlı puan tablosu. Uyg
 
 ## Özellikler
 
-- Dört kişilik Okey veya 101 masası oluşturma
+- Dört kişilik tekli veya iki takımlı eşli Okey/101 masası oluşturma
 - Paylaşılabilir bağlantıyla salt okunur canlı takip
 - Masa sahibinin el puanlarını eklemesi, düzenlemesi, silmesi ve oyunu bitirmesi
 - En düşük toplam puana göre sıralama
@@ -13,7 +13,7 @@ Okey ve 101 masaları için telefondan kullanılabilen, canlı puan tablosu. Uyg
 ## Supabase kurulumu (ücretsiz katman)
 
 1. Supabase Free üzerinde bir proje oluşturun.
-2. Yeni bir Supabase projesiyse SQL Editor'de migration dosyalarını ad sırasına göre çalıştırın: önce `20261008000000_create_yazboz.sql`, sonra `20261008010000_add_play_mode.sql`. İlk migration'ı daha önce çalıştırdıysanız yalnızca ikinci migration'ı çalıştırın.
+2. Yeni bir Supabase projesiyse SQL Editor'de migration dosyalarını ad sırasına göre çalıştırın: `20261008000000_create_yazboz.sql`, `20261008010000_add_play_mode.sql` ve `20261008020000_support_two_team_names.sql`. Önceki migration'ları çalıştırdıysanız yalnızca yeni `20261008020000_support_two_team_names.sql` dosyasını çalıştırın.
 3. Supabase Realtime ayarlarında public channel erişiminin açık olduğunu doğrulayın. Oda kimliği rastgele UUID olduğundan yayın yalnızca masa bağlantısını bilen katılımcılara yönelir.
 4. Project Connect/Settings sayfasından Project URL ve publishable key değerlerini alın.
 5. Proje kökünde `.env.local` oluşturup `.env.example` içindeki değişkenleri doldurun:
@@ -43,5 +43,5 @@ Netlify Free ve Supabase Free kotaları aşılırsa uygulama geçici olarak dura
 
 ## Puanlama ve masa yetkisi
 
-Okey ve 101 yalnızca masa türünü belirtir; oyun kuralları ve otomatik ceza hesabı uygulanmaz. Her el için dört oyuncunun tam sayı puanı girilir. Yeni masayı oluşturan tarayıcı yazma yetkisini `localStorage` içinde tutar; aynı paylaşım bağlantısını açan diğer tarayıcılar salt okunurdur. Tarayıcı verisi silinir veya cihaz değiştirilirse sahiplik devredilemez.
+Okey ve 101 yalnızca masa türünü belirtir; oyun kuralları ve otomatik ceza hesabı uygulanmaz. Tekli oyunda dört oyuncu adı, eşli oyunda ise iki takım adı girilir; takım adında iki oyuncunun adını birlikte yazabilirsiniz (ör. “Ali & Ayşe”). Her el için dört oyuncunun veya iki takımın tam sayı puanı girilir. Yeni masayı oluşturan tarayıcı yazma yetkisini `localStorage` içinde tutar; aynı paylaşım bağlantısını açan diğer tarayıcılar salt okunurdur. Tarayıcı verisi silinir veya cihaz değiştirilirse sahiplik devredilemez.
 # yazboz

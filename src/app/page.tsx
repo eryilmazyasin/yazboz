@@ -6,11 +6,25 @@ import { createGame } from "@/lib/game-api";
 import { isSupabaseConfigured } from "@/lib/supabase";
 import type { GameType, PlayMode } from "@/lib/types";
 
-const initialNames = ["Oyuncu 1", "Oyuncu 2", "Oyuncu 3", "Oyuncu 4"];
+const initialNames = ["", "", "", ""];
+
+function getCreateGameErrorMessage(error: unknown): string {
+  const message = error instanceof Error
+    ? error.message
+    : typeof error === "object" && error !== null && "message" in error && typeof error.message === "string"
+      ? error.message
+      : "";
+
+  if (/dört oyuncu|dört kişilik|oyuncu veya takım sayısı|could not find the function public\.create_game/i.test(message)) {
+    return "Supabase veritabanı güncel değil. SQL Editor’da 20261008020000_support_two_team_names.sql migration’ını çalıştırıp yeniden deneyin.";
+  }
+
+  return message || "Masa oluşturulamadı. Supabase bağlantınızı kontrol edip yeniden deneyin.";
+}
 
 export default function HomePage() {
   const router = useRouter();
-  const [gameType, setGameType] = useState<GameType>("okey");
+  const [gameType, setGameType] = useState<GameType>("101");
   const [playMode, setPlayMode] = useState<PlayMode>("solo");
   const [names, setNames] = useState(initialNames);
   const [busy, setBusy] = useState(false);
@@ -20,17 +34,18 @@ export default function HomePage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
-    if (names.some((name) => !name.trim())) {
-      setError("Dört oyuncunun adını da girin.");
+    const activeNames = playMode === "teams" ? names.slice(0, 2) : names;
+    if (activeNames.some((name) => !name.trim())) {
+      setError(playMode === "teams" ? "İki takımın oyuncularını da yazın." : "Dört oyuncunun adını da girin.");
       return;
     }
 
     setBusy(true);
     try {
-      const game = await createGame({ gameType, playMode, playerNames: names });
+      const game = await createGame({ gameType, playMode, playerNames: activeNames });
       router.push(`/masa/${game.id}`);
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "Masa oluşturulamadı.");
+      setError(getCreateGameErrorMessage(caught));
       setBusy(false);
     }
   }
@@ -42,22 +57,9 @@ export default function HomePage() {
           <span className="brand-mark">Y</span>
           <span>yazboz</span>
         </a>
-        <span className="header-note">Masanın skoru, herkesin cebinde.</span>
       </header>
 
-      <section className="hero-grid">
-        <div className="hero-copy">
-          <div className="eyebrow"><span className="live-dot" /> MASA AÇIK, PUANLAR GÜNCEL</div>
-          <h1>Yazboz artık<br /><em>hep elinizin altında.</em></h1>
-          <p className="hero-description">
-            Okey ya da 101 masanı kur. Puanları tek yerden yaz, herkes telefonundan anlık takip etsin.
-          </p>
-          <div className="hero-proof">
-            <span className="proof-icon">↗</span>
-            <span>Hesap yok, indirme yok.<br /><strong>Bir linkle masaya katıl.</strong></span>
-          </div>
-        </div>
-
+      <section className="home-content">
         <section className="setup-card" aria-labelledby="setup-title">
           <div className="card-heading">
             <div>
@@ -101,23 +103,24 @@ export default function HomePage() {
             </fieldset>
 
             {playMode === "teams" && (
-              <p className="team-pairing-note"><span>↗</span> İsimleri oturma sırasına göre girin: 1. ve 3. oyuncu eş, 2. ve 4. oyuncu eş olur.</p>
+              <p className="team-pairing-note"><span>↗</span> 1. alan 1. takım, 2. alan 2. takım içindir. Her alana iki oyuncunun adını birlikte yazın; ör. Ali &amp; Ayşe. El puanı takım toplamına eklenir.</p>
             )}
 
             <div className="players-heading">
-              <label>Oyuncular <span>· 4 kişi</span></label>
-              <span className="players-count">♟ &nbsp; 4 KOLTUK</span>
+              <label>{playMode === "teams" ? "Takım oyuncuları" : "Oyuncular"} <span>· {playMode === "teams" ? "2 takım" : "4 kişi"}</span></label>
+              <span className="players-count">♟ &nbsp; {playMode === "teams" ? "2 TAKIM" : "4 KOLTUK"}</span>
             </div>
-            <div className="player-inputs">
-              {names.map((name, index) => (
-                <label className="player-field" key={index}>
+            <div className={`player-inputs ${playMode === "teams" ? "team-player-inputs" : ""}`}>
+              {(playMode === "teams" ? names.slice(0, 2) : names).map((name, index) => (
+                <label className={`player-field ${playMode === "teams" ? "team-player-field" : ""}`} key={index}>
                   <span className={`player-number player-number-${index + 1}`}>{String(index + 1).padStart(2, "0")}</span>
+                  {playMode === "teams" && <strong className="team-player-title">{index + 1}. takım oyuncuları</strong>}
                   <input
-                    aria-label={`${index + 1}. oyuncu adı`}
-                    maxLength={32}
+                    aria-label={playMode === "teams" ? `${index + 1}. takım oyuncuları` : `${index + 1}. oyuncu adı`}
+                    maxLength={playMode === "teams" ? 64 : 32}
                     value={name}
                     onChange={(event) => setNames((current) => current.map((value, i) => i === index ? event.target.value : value))}
-                    placeholder={`${index + 1}. oyuncu adı`}
+                    placeholder={playMode === "teams" ? "Örn. Ali & Ayşe" : `${index + 1}. oyuncu adı`}
                     disabled={busy}
                   />
                 </label>
@@ -139,11 +142,6 @@ export default function HomePage() {
           <p className="card-footnote"><span>♧</span> Masayı açan kişi puanları girer. Diğerleri canlı izler.</p>
         </section>
       </section>
-
-      <footer className="landing-footer">
-        <span>YAZBOZ <span className="footer-dot">·</span> 2026</span>
-        <span>MASA SENİN, YAZBOZ HAZIR.</span>
-      </footer>
     </main>
   );
 }
