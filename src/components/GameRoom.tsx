@@ -23,16 +23,19 @@ function formatDate(value: string): string {
 
 function RoundEditor({ players, round, busy, onCancel, onSave }: RoundEditorProps) {
   const [scores, setScores] = useState<Record<string, string>>(() =>
-    Object.fromEntries(players.map((player) => [player.id, String(round?.scores[player.id] ?? 0)])),
+    Object.fromEntries(players.map((player) => [player.id, String(Math.abs(round?.scores[player.id] ?? 0))])),
+  );
+  const [negativeScores, setNegativeScores] = useState<Record<string, boolean>>(() =>
+    Object.fromEntries(players.map((player) => [player.id, (round?.scores[player.id] ?? 0) < 0])),
   );
   const [error, setError] = useState("");
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const parsed = Object.fromEntries(
-      players.map((player) => [player.id, Number(scores[player.id])]),
+      players.map((player) => [player.id, Number(scores[player.id]) * (negativeScores[player.id] ? -1 : 1)]),
     );
-    if (players.some((player) => !Number.isSafeInteger(parsed[player.id]))) {
+    if (players.some((player) => !Number.isSafeInteger(Number(scores[player.id])) || Number(scores[player.id]) < 0)) {
       setError("Her oyuncu veya takım için tam sayı puan girin.");
       return;
     }
@@ -62,12 +65,16 @@ function RoundEditor({ players, round, busy, onCancel, onSave }: RoundEditorProp
                 <span className={`player-number player-number-${index + 1}`}>{String(index + 1).padStart(2, "0")}</span>
                 <span className="score-player-name">{player.name}</span>
                 <span className="score-control">
-                  <span>±</span>
+                  <span className="score-sign-buttons" role="group" aria-label={`${player.name} puan işareti`}>
+                    <button className={!negativeScores[player.id] ? "selected" : ""} type="button" aria-label={`${player.name} için artı puan`} aria-pressed={!negativeScores[player.id]} onClick={() => setNegativeScores((current) => ({ ...current, [player.id]: false }))}>+</button>
+                    <button className={negativeScores[player.id] ? "selected" : ""} type="button" aria-label={`${player.name} için eksi puan`} aria-pressed={Boolean(negativeScores[player.id])} onClick={() => setNegativeScores((current) => ({ ...current, [player.id]: true }))}>−</button>
+                  </span>
                   <input
                     aria-label={`${player.name} puanı`}
                     type="number"
+                    min="0"
                     step="1"
-                    inputMode="decimal"
+                    inputMode="numeric"
                     value={scores[player.id]}
                     onChange={(event) => setScores((current) => ({ ...current, [player.id]: event.target.value }))}
                     required
@@ -135,6 +142,7 @@ export default function GameRoom({ gameId }: GameRoomProps) {
   const [editingRound, setEditingRound] = useState<Round | null | undefined>(undefined);
   const [penaltyTarget, setPenaltyTarget] = useState<Player | null>(null);
   const [shareFeedback, setShareFeedback] = useState("");
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [connection, setConnection] = useState("Bağlanıyor");
   const [isOwner, setIsOwner] = useState(false);
   const [recordCooldowns, setRecordCooldowns] = useState<Record<string, number>>({});
@@ -301,14 +309,25 @@ export default function GameRoom({ gameId }: GameRoomProps) {
     }
   }
 
-  async function handleShare() {
+  function getShareData() {
     const gameTitle = game?.gameType === "101" ? "101 Okey" : "Okey";
-    const shareData = {
+    return {
       title: `Green Garden Dijital Yazboz · ${gameTitle}`,
       text: `${gameTitle} masasının skorlarını canlı takip et.`,
       url: window.location.href,
     };
+  }
 
+  function handleWhatsAppShare() {
+    const shareData = getShareData();
+    const message = `${shareData.text} ${shareData.url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+    setShareMenuOpen(false);
+  }
+
+  async function handleOtherShare() {
+    const shareData = getShareData();
+    setShareMenuOpen(false);
     if (navigator.share) {
       try {
         await navigator.share(shareData);
@@ -347,7 +366,13 @@ export default function GameRoom({ gameId }: GameRoomProps) {
         <a className="brand" href="/"><span className="brand-mark">Y</span><span>yazboz</span></a>
         <div className="room-header-actions">
           <span className={`connection-pill ${connection.includes("açık") ? "connected" : ""}`}><span className="live-dot" />{connection}</span>
-          <button className="share-button" type="button" onClick={handleShare}><span>↗</span>{shareFeedback || "Masayı paylaş"}</button>
+          <div className="share-menu-wrap">
+            <button className="share-button" type="button" aria-expanded={shareMenuOpen} aria-haspopup="menu" onClick={() => setShareMenuOpen((open) => !open)}><span>↗</span>{shareFeedback || "Masayı paylaş"}</button>
+            {shareMenuOpen && <div className="share-menu" role="menu">
+              <button type="button" role="menuitem" onClick={handleWhatsAppShare}><span aria-hidden="true">◉</span>WhatsApp ile gönder</button>
+              <button type="button" role="menuitem" onClick={() => void handleOtherShare()}><span aria-hidden="true">↗</span>Diğer uygulamalar</button>
+            </div>}
+          </div>
         </div>
       </header>
 

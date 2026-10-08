@@ -122,6 +122,11 @@ h1, h2, h3, p { margin-top: 0; }
 .share-button, .finish-button, .add-round-button, .secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 37px; padding: 0 13px; border: 1px solid #dfe3dc; border-radius: 3px; background: transparent; color: #314c3a; font-size: 11px; font-weight: 600; }
 .share-button:hover, .finish-button:hover, .add-round-button:hover, .secondary-button:hover { background: #edf2ed; }
 .share-button span, .finish-button span { font-size: 14px; }
+.share-menu-wrap { position: relative; }
+.share-menu { position: absolute; z-index: 20; top: calc(100% + 8px); right: 0; width: 220px; padding: 5px; border: 1px solid #e4e4dc; border-radius: 5px; background: var(--surface); box-shadow: 0 12px 30px #17221d20; }
+.share-menu button { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 11px; border: 0; border-radius: 3px; background: transparent; color: var(--ink); text-align: left; font: inherit; font-size: 12px; cursor: pointer; }
+.share-menu button:hover { background: #edf2ed; }
+.share-menu button span { width: 20px; color: #315a46; font-size: 16px; text-align: center; }
 .room-content { width: min(100%, 830px); margin: 0 auto; padding: 38px 0 20px; }
 .room-title-row { display: flex; align-items: end; justify-content: space-between; gap: 20px; margin-bottom: 25px; }
 .back-link { display: inline-block; margin-bottom: 11px; color: #81877f; font-size: 10px; }
@@ -230,8 +235,11 @@ h1, h2, h3, p { margin-top: 0; }
 .score-input-list { border-top: 1px solid var(--line); }
 .score-input-row { min-height: 58px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #efede7; }
 .score-player-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 500; }
-.score-control { width: 110px; height: 36px; display: flex; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid #e0e2da; border-radius: 3px; color: #8a9188; }
-.score-control input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-family: var(--mono); font-size: 12px; text-align: right; }
+.score-control { width: 145px; height: 42px; display: flex; flex: 0 0 auto; align-items: center; gap: 6px; padding: 4px; border: 1px solid #e0e2da; border-radius: 3px; color: #8a9188; }
+.score-sign-buttons { display: flex; flex: 0 0 auto; gap: 3px; }
+.score-sign-buttons button { width: 32px; min-height: 32px; padding: 0; border: 1px solid #e0e2da; border-radius: 3px; background: #fff; color: #687368; font-size: 18px; font-weight: 700; cursor: pointer; }
+.score-sign-buttons button.selected { border-color: #315a46; background: #315a46; color: #fff; }
+.score-control input { flex: 1; width: 0; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--ink); font-family: var(--mono); font-size: 12px; text-align: right; }
 .modal-actions { display: flex; gap: 9px; margin-top: 20px; }
 .modal-actions .primary-button { margin: 0; flex: 1; }
 .modal-actions .secondary-button { min-width: 95px; }
@@ -342,6 +350,12 @@ h1, h2, h3, p { margin-top: 0; }
   .rank-actions { width: 100%; margin-left: 0; gap: 5px; }
   .record-button, .penalty-button { min-height: 46px; padding: 7px 4px; font-size: 11px; }
   .round-modal { padding: 19px; }
+  .score-control { width: 136px; }
+  .score-sign-buttons button { width: 29px; min-height: 34px; }
+}
+
+@media (max-width: 680px) {
+  .player-field input, .team-player-field input, .score-control input { font-size: 16px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
