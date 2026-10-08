@@ -11,7 +11,7 @@ export interface Round {
   id: string;
   createdAt: string;
   scores: Record<string, number>;
-  kind?: "round" | "record";
+  kind?: "round" | "record" | "penalty";
 }
 
 export interface Game {
@@ -55,4 +55,11 @@ export interface RoundEditorProps {
   busy: boolean;
   onCancel: () => void;
   onSave: (round: Round) => void;
+}
+
+export interface PenaltyEditorProps {
+  player: Player;
+  busy: boolean;
+  onCancel: () => void;
+  onSave: (points: number) => void;
 }

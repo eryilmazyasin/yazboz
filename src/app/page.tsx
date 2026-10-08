@@ -60,6 +60,14 @@ export default function HomePage() {
       </header>
 
       <section className="home-content">
+        <div className="home-brand-heading">
+          <span className="garden-mark" aria-hidden="true">GG</span>
+          <div className="garden-brand-copy">
+            <span className="garden-brand-name">GREEN GARDEN</span>
+            <h1>Dijital Yazboz</h1>
+          </div>
+          <div className="fair-play-note"><span aria-hidden="true">!</span><p><strong>Hile hurda, kaçak göçek yapmayın;</strong><br /> yakalar sikeriz, ona göre.</p></div>
+        </div>
         <section className="setup-card" aria-labelledby="setup-title">
           <div className="card-heading">
             <div>

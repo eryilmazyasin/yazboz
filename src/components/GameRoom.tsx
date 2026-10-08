@@ -10,7 +10,7 @@ import {
   updateRound,
 } from "@/lib/game-api";
 import { getSupabaseBrowserClient } from "@/lib/supabase";
-import type { Game, GameRoomProps, GameStatus, LeaderboardRow, Round, RoundEditorProps } from "@/lib/types";
+import type { Game, GameRoomProps, GameStatus, LeaderboardRow, PenaltyEditorProps, Player, Round, RoundEditorProps } from "@/lib/types";
 
 function formatDate(value: string): string {
   return new Intl.DateTimeFormat("tr-TR", {
@@ -87,6 +87,44 @@ function RoundEditor({ players, round, busy, onCancel, onSave }: RoundEditorProp
   );
 }
 
+function PenaltyEditor({ player, busy, onCancel, onSave }: PenaltyEditorProps) {
+  const [points, setPoints] = useState("");
+  const [error, setError] = useState("");
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const parsedPoints = Number(points);
+    if (!/^\d+$/.test(points) || !Number.isSafeInteger(parsedPoints) || parsedPoints <= 0) {
+      setError("Pozitif bir tam sayı girin.");
+      return;
+    }
+    onSave(parsedPoints);
+  }
+
+  return (
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) onCancel();
+    }}>
+      <section className="round-modal penalty-modal" role="dialog" aria-modal="true" aria-labelledby="penalty-title">
+        <div className="modal-heading">
+          <div><span className="step-label">MANUEL CEZA</span><h2 id="penalty-title">{player.name}</h2></div>
+          <button className="icon-button" onClick={onCancel} aria-label="Kapat" type="button">×</button>
+        </div>
+        <p className="modal-help">Eklenecek ceza puanını girin. Bu değer oyuncunun veya takımın toplamına artı olarak eklenir.</p>
+        <form onSubmit={handleSubmit}>
+          <label className="penalty-input-label" htmlFor="penalty-points">Ceza puanı</label>
+          <span className="penalty-input-control"><span aria-hidden="true">+</span><input id="penalty-points" type="number" min="1" step="1" inputMode="numeric" value={points} onChange={(event) => setPoints(event.target.value)} required /></span>
+          {error && <p className="form-error" role="alert">{error}</p>}
+          <div className="modal-actions">
+            <button className="secondary-button" type="button" onClick={onCancel}>Vazgeç</button>
+            <button className="primary-button" type="submit" disabled={busy}>{busy ? "Kaydediliyor…" : "Cezayı ekle"}<span>＋</span></button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 export default function GameRoom({ gameId }: GameRoomProps) {
   const router = useRouter();
   const [game, setGame] = useState<Game | null>(null);
@@ -95,6 +133,7 @@ export default function GameRoom({ gameId }: GameRoomProps) {
   const [actionError, setActionError] = useState("");
   const [saving, setSaving] = useState(false);
   const [editingRound, setEditingRound] = useState<Round | null | undefined>(undefined);
+  const [penaltyTarget, setPenaltyTarget] = useState<Player | null>(null);
   const [copied, setCopied] = useState(false);
   const [connection, setConnection] = useState("Bağlanıyor");
   const [isOwner, setIsOwner] = useState(false);
@@ -188,6 +227,7 @@ export default function GameRoom({ gameId }: GameRoomProps) {
       await saveGame(nextGame, nextStatus);
       setGame({ ...nextGame, status: nextStatus, updatedAt: new Date().toISOString() });
       setEditingRound(undefined);
+      setPenaltyTarget(null);
       return true;
     } catch (error) {
       setActionError(error instanceof Error ? error.message : "Değişiklik kaydedilemedi.");
@@ -226,6 +266,17 @@ export default function GameRoom({ gameId }: GameRoomProps) {
       recordCooldownsRef.current = remaining;
       setRecordCooldowns(remaining);
     }
+  }
+
+  async function handlePenaltySave(playerId: string, points: number) {
+    if (!game) return;
+    const penalty: Round = {
+      id: crypto.randomUUID(),
+      createdAt: new Date().toISOString(),
+      scores: Object.fromEntries(game.players.map((player) => [player.id, player.id === playerId ? points : 0])),
+      kind: "penalty",
+    };
+    await persist({ ...game, rounds: [...game.rounds, penalty] });
   }
 
   async function handleDeleteRound(round: Round) {
@@ -270,7 +321,7 @@ export default function GameRoom({ gameId }: GameRoomProps) {
 
   const finished = game.status === "finished";
   const orderedRounds = [...game.rounds].reverse();
-  const handCount = game.rounds.filter((round) => round.kind !== "record").length;
+  const handCount = game.rounds.filter((round) => round.kind !== "record" && round.kind !== "penalty").length;
 
   return (
     <main className="room-shell">
@@ -307,14 +358,19 @@ export default function GameRoom({ gameId }: GameRoomProps) {
                     const playerIndex = game.players.findIndex((item) => item.id === member.id);
                     return <span className="rank-player-member" key={member.id}>
                       <span className={`player-number player-number-${playerIndex + 1}`}>{member.name.slice(0, 1).toLocaleUpperCase("tr-TR")}</span>
-                      <strong>{member.name}</strong>
+                      <span className="rank-player-title">
+                        <strong>{member.name}</strong>
+                        {index === 0 && member.id === player.players[0].id && <span className="leader-tag">LİDER</span>}
+                      </span>
                       {isOwner && !finished && (() => {
                         const remaining = Math.max(0, (recordCooldowns[member.id] ?? 0) - cooldownClock);
-                        return <button className="record-button" type="button" aria-label={`Rekor: ${member.name} için 100 puan düş`} title={`${member.name} için −100 puan kaydet`} disabled={saving || remaining > 0} onClick={() => void handleRecord(member.id)}>{remaining > 0 ? `${Math.ceil(remaining / 1000)} sn` : <><span>Rekor</span><small>−100</small></>}</button>;
+                        return <span className="rank-actions" key={`actions-${member.id}`}>
+                          <button className="record-button" type="button" aria-label={`Rekor: ${member.name} için 100 puan düş`} title={`${member.name} için −100 puan kaydet`} disabled={saving || remaining > 0} onClick={() => void handleRecord(member.id)}>{remaining > 0 ? `${Math.ceil(remaining / 1000)} sn` : <><span>Rekor</span><small>−100</small></>}</button>
+                          <button className="penalty-button" type="button" aria-label={`${member.name} için ceza ekle`} onClick={() => setPenaltyTarget(member)} disabled={saving}>Ceza</button>
+                        </span>;
                       })()}
                     </span>;
                   })}
-                  {index === 0 && <span className="leader-tag">LİDER</span>}
                 </span>
                 <strong className={`total-score ${player.total < 0 ? "negative" : ""}`}>{player.total > 0 ? "+" : ""}{player.total}</strong>
               </div>
@@ -334,7 +390,7 @@ export default function GameRoom({ gameId }: GameRoomProps) {
             <div className="round-list">
               {orderedRounds.map((round, index) => (
                 <article className="round-card" key={round.id}>
-                  <div className="round-card-heading"><div><span className={`round-number ${round.kind === "record" ? "record-round-label" : ""}`}>{round.kind === "record" ? "REKOR" : `EL ${String(handCount - orderedRounds.slice(0, index).filter((item) => item.kind !== "record").length).padStart(2, "0")}`}</span><span className="round-time">{formatDate(round.createdAt)}</span></div>
+                  <div className="round-card-heading"><div><span className={`round-number ${round.kind === "record" ? "record-round-label" : round.kind === "penalty" ? "penalty-round-label" : ""}`}>{round.kind === "record" ? "REKOR" : round.kind === "penalty" ? "CEZA" : `EL ${String(handCount - orderedRounds.slice(0, index).filter((item) => item.kind !== "record" && item.kind !== "penalty").length).padStart(2, "0")}`}</span><span className="round-time">{formatDate(round.createdAt)}</span></div>
                     {isOwner && !finished && <div className="round-actions"><button onClick={() => setEditingRound(round)}>Düzenle</button><button className="delete-text" onClick={() => void handleDeleteRound(round)}>Sil</button></div>}
                   </div>
                   <div className={`round-scores ${game.playMode === "teams" && game.players.length === 2 ? "round-scores-teams" : ""}`}>
@@ -356,6 +412,7 @@ export default function GameRoom({ gameId }: GameRoomProps) {
       </div>
 
       {editingRound !== undefined && <RoundEditor players={game.players} round={editingRound} busy={saving} onCancel={() => setEditingRound(undefined)} onSave={(round) => void handleRoundSave(round)} />}
+      {penaltyTarget && <PenaltyEditor player={penaltyTarget} busy={saving} onCancel={() => setPenaltyTarget(null)} onSave={(points) => void handlePenaltySave(penaltyTarget.id, points)} />}
     </main>
   );
 }
